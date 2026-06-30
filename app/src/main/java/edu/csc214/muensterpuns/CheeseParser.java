@@ -1,21 +1,23 @@
+    // This class is the last step in abstracting the business of getting the data
+    // out of the file and into a format that we can reasonably use.  here we are 
+    // MAKING CHEESE!
+
 package edu.csc214.muensterpuns;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 /**
  * Converts schema-aligned CSV fields into an immutable {@link Cheese}.
  *
- * <p>Missing optional values are preserved as absent values. Invalid IDs,
- * percentages, organic flags, or record widths produce a field-specific
- * {@link MalformedCheeseException}.</p>
+ * <p>An invalid cheese ID makes the complete record unusable. Invalid optional
+ * analysis values, such as moisture or organic status, are reported as
+ * nonfatal problems while the remaining valid fields are preserved.</p>
  */
 public final class CheeseParser {
-    // This class is the last step in abstracting the business of getting the data
-    // out of the file and into a format that we can reasonably use.  here we are 
-    // MAKING CHEESE!
-    
-    public Cheese parse(List<String> fields, CheeseSchema schema) {
+
+    public CheeseParseResult parse(List<String> fields, CheeseSchema schema) {
         Objects.requireNonNull(fields, "CSV fields cannot be null.");
         Objects.requireNonNull(schema, "Cheese schema cannot be null.");
 
@@ -27,31 +29,31 @@ public final class CheeseParser {
             throw new MalformedCheeseException(recordId, exception.getMessage());
         }
 
-        int id = parseId(
-                    getField(fields, schema.cheeseIdIndex(),    
-                    "CheeseId", recordId), recordId);
-        Double moisturePercent = parseMoisture(
-                    getField(fields, schema.moisturePercentIndex(), 
-                    "MoisturePercent", recordId), recordId);
-        String flavour = getField(fields,
-                                    schema.flavourIndex(), 
-                                    "FlavourEn", recordId);
-        Boolean organic = parseOrganic(
-                            getField(fields, 
-                                schema.organicIndex(), 
-                                "Organic", recordId), recordId);
-        String milkType = getField(
-                            fields, schema.milkTypeIndex(), 
-                            "MilkTypeEn", recordId);
-        String milkTreatmentType = getField(
-                                    fields, schema.milkTreatmentTypeIndex(), 
-                                    "MilkTreatmentTypeEn", recordId);
+        int id = parseId(getField(fields, schema.cheeseIdIndex(), "CheeseId", recordId), recordId);
+        List<String> problems = new ArrayList<>();
 
-        try {
-            return new Cheese(id, moisturePercent, flavour, organic, milkType, milkTreatmentType);
-        } catch (IllegalArgumentException exception) {
-            throw new MalformedCheeseException(recordId, exception.getMessage());
-        }
+        Double moisturePercent = parseMoisture(
+                getField(fields, schema.moisturePercentIndex(), "MoisturePercent", recordId),
+                problems);
+
+        String flavour = getField(fields, schema.flavourIndex(), "FlavourEn", recordId);
+
+        Boolean organic = parseOrganic(
+                getField(fields, schema.organicIndex(), "Organic", recordId),
+                problems);
+
+        String milkType = getField(fields, schema.milkTypeIndex(), "MilkTypeEn", recordId);
+        String milkTreatmentType = getField(fields, schema.milkTreatmentTypeIndex(), "MilkTreatmentTypeEn", recordId);
+
+        Cheese cheese = new Cheese(
+                id,
+                moisturePercent,
+                flavour,
+                organic,
+                milkType,
+                milkTreatmentType);
+
+        return new CheeseParseResult(cheese, problems);
     }
 
     private int parseId(String value, String recordId) {
@@ -74,7 +76,7 @@ public final class CheeseParser {
         }
     }
 
-    private Double parseMoisture(String value, String recordId) {
+    private Double parseMoisture(String value, List<String> problems) {
         String normalized = value.strip();
 
         if (normalized.isEmpty()) {
@@ -85,16 +87,18 @@ public final class CheeseParser {
             double moisture = Double.parseDouble(normalized);
 
             if (!Double.isFinite(moisture) || moisture < 0.0 || moisture > 100.0) {
-                throw new MalformedCheeseException(recordId, "Moisture percentage must be between 0 and 100.");
+                problems.add("Moisture percentage must be between 0 and 100.");
+                return null;
             }
 
             return moisture;
         } catch (NumberFormatException exception) {
-            throw new MalformedCheeseException(recordId, "Invalid moisture value \"" + normalized + "\".");
+            problems.add("Invalid moisture value \"" + normalized + "\".");
+            return null;
         }
     }
 
-    private Boolean parseOrganic(String value, String recordId) {
+    private Boolean parseOrganic(String value, List<String> problems) {
         String normalized = value.strip();
 
         if (normalized.isEmpty()) {
@@ -104,7 +108,10 @@ public final class CheeseParser {
         return switch (normalized) {
             case "1" -> true;
             case "0" -> false;
-            default -> throw new MalformedCheeseException(recordId, "Invalid organic value \"" + normalized + "\". Expected 0 or 1.");
+            default -> {
+                problems.add("Invalid organic value \"" + normalized + "\". Expected 0 or 1.");
+                yield null;
+            }
         };
     }
 
@@ -125,7 +132,6 @@ public final class CheeseParser {
             return null;
         }
 
-        String value = fields.get(index);
-        return value == null ? null : value;
+        return fields.get(index);
     }
 }

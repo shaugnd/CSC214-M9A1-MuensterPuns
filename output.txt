@@ -1,0 +1,9 @@
+Canadian Cheese Analysis
+Cheeses analyzed: 1042
+Pasteurized cheeses: 800
+Raw-milk cheeses: 115
+Organic cheeses above 41.0% moisture: 53
+Most common milk source: Cow (761 cheeses)
+Valid moisture values: 1028
+Average moisture: 47.07%
+Flavour descriptions containing "lactic": 38
